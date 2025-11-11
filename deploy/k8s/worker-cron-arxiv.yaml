@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: arxiv-hourly
+spec:
+  schedule: "15 ** **"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: arxiv-worker
+            image: ghcr.io/yourorg/deeptech-worker:latest
+            args: ["python","-m","app.workers.arxiv_hourly"]
+            envFrom:
+            - secretRef: { name: deeptech-secrets }

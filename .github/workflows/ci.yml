@@ -1,0 +1,41 @@
+name: ci
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: deeptech
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres -d deeptech"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/deeptech
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    - name: Install deps
+      run: |
+        pip install -r requirements/dev.txt
+    - name: Lint
+      run: |
+        ruff check .
+        black --check .
+        isort --check-only .
+    - name: Type check
+      run: mypy .
+    - name: Tests
+      run: pytest -q

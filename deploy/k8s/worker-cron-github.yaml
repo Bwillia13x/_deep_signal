@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: github-hourly
+spec:
+  schedule: "30 ** **"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: github-worker
+            image: ghcr.io/yourorg/deeptech-worker:latest
+            args: ["python","-m","app.workers.github_hourly"]
+            envFrom:
+            - secretRef: { name: deeptech-secrets }

@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: opportunities-daily
+spec:
+  schedule: "0 4 * * 1"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: opportunities-worker
+            image: ghcr.io/yourorg/deeptech-worker:latest
+            args: ["python","-m","app.workers.opportunities_daily"]
+            envFrom:
+            - secretRef: { name: deeptech-secrets }

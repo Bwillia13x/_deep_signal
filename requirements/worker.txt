@@ -1,0 +1,5 @@
+-r base.txt
+sentence-transformers==3.2.1
+torch==2.4.1
+pypdf==5.0.1
+rapidfuzz==3.9.7

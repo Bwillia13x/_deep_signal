@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: scoring-daily
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: scoring-worker
+            image: ghcr.io/yourorg/deeptech-worker:latest
+            args: ["python","-m","app.workers.scoring_daily"]
+            envFrom:
+            - secretRef: { name: deeptech-secrets }
