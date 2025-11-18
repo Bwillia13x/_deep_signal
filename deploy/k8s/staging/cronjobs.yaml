@@ -1,0 +1,320 @@
+---
+# arXiv Hourly Ingestion Worker
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: arxiv-hourly
+  namespace: deeptech-staging
+  labels:
+    app: arxiv-worker
+    environment: staging
+spec:
+  schedule: "0 * * * *"  # Every hour at :00
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: arxiv-worker
+            environment: staging
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: arxiv-worker
+            image: ghcr.io/yourorg/deeptech-radar-worker:latest
+            imagePullPolicy: Always
+            command: ["python", "-m", "app.workers.arxiv_hourly"]
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deeptech-secrets
+                  key: database-url
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: deeptech-secrets
+                  key: openai-api-key
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: LOG_LEVEL
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: ENVIRONMENT
+            - name: ARXIV_LOOKBACK_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: ARXIV_LOOKBACK_DAYS
+            - name: ARXIV_MAX_RESULTS
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: ARXIV_MAX_RESULTS
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "250m"
+              limits:
+                memory: "1Gi"
+                cpu: "500m"
+---
+# GitHub Hourly Ingestion Worker
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: github-hourly
+  namespace: deeptech-staging
+  labels:
+    app: github-worker
+    environment: staging
+spec:
+  schedule: "15 * * * *"  # Every hour at :15
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: github-worker
+            environment: staging
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: github-worker
+            image: ghcr.io/yourorg/deeptech-radar-worker:latest
+            imagePullPolicy: Always
+            command: ["python", "-m", "app.workers.github_hourly"]
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deeptech-secrets
+                  key: database-url
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: deeptech-secrets
+                  key: github-token
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: LOG_LEVEL
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: ENVIRONMENT
+            - name: GITHUB_LOOKBACK_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: GITHUB_LOOKBACK_DAYS
+            - name: GITHUB_MAX_REPOS
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: GITHUB_MAX_REPOS
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "250m"
+              limits:
+                memory: "1Gi"
+                cpu: "500m"
+---
+# Linking Daily Worker
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: linking-daily
+  namespace: deeptech-staging
+  labels:
+    app: linking-worker
+    environment: staging
+spec:
+  schedule: "30 2 * * *"  # Daily at 02:30 UTC
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: linking-worker
+            environment: staging
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: linking-worker
+            image: ghcr.io/yourorg/deeptech-radar-worker:latest
+            imagePullPolicy: Always
+            command: ["python", "-m", "app.workers.linking_daily"]
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deeptech-secrets
+                  key: database-url
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: deeptech-secrets
+                  key: openai-api-key
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: LOG_LEVEL
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: ENVIRONMENT
+            - name: LINKING_BATCH_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: LINKING_BATCH_SIZE
+            - name: LINKING_MAX_REPO_AGE_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: LINKING_MAX_REPO_AGE_DAYS
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+---
+# Scoring Daily Worker
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: scoring-daily
+  namespace: deeptech-staging
+  labels:
+    app: scoring-worker
+    environment: staging
+spec:
+  schedule: "0 3 * * *"  # Daily at 03:00 UTC
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: scoring-worker
+            environment: staging
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: scoring-worker
+            image: ghcr.io/yourorg/deeptech-radar-worker:latest
+            imagePullPolicy: Always
+            command: ["python", "-m", "app.workers.scoring_daily"]
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deeptech-secrets
+                  key: database-url
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: LOG_LEVEL
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: ENVIRONMENT
+            - name: SCORING_BATCH_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: SCORING_BATCH_SIZE
+            resources:
+              requests:
+                memory: "1Gi"
+                cpu: "500m"
+              limits:
+                memory: "2Gi"
+                cpu: "1000m"
+---
+# Opportunities Daily Worker
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: opportunities-daily
+  namespace: deeptech-staging
+  labels:
+    app: opportunities-worker
+    environment: staging
+spec:
+  schedule: "30 3 * * *"  # Daily at 03:30 UTC
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: opportunities-worker
+            environment: staging
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: opportunities-worker
+            image: ghcr.io/yourorg/deeptech-radar-worker:latest
+            imagePullPolicy: Always
+            command: ["python", "-m", "app.workers.opportunities_daily"]
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deeptech-secrets
+                  key: database-url
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: deeptech-secrets
+                  key: openai-api-key
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: LOG_LEVEL
+            - name: ENVIRONMENT
+              valueFrom:
+                configMapKeyRef:
+                  name: deeptech-config
+                  key: ENVIRONMENT
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "250m"
+              limits:
+                memory: "1Gi"
+                cpu: "500m"

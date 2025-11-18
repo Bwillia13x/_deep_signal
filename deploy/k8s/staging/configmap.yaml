@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: deeptech-config
+  namespace: deeptech-staging
+data:
+  LOG_LEVEL: "INFO"
+  ENVIRONMENT: "staging"
+  PROMETHEUS_MULTIPROC_DIR: "/tmp/prometheus"
+  # API configuration
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  # Worker configuration
+  WORKER_CONCURRENCY: "4"
+  # arXiv ingestion settings
+  ARXIV_LOOKBACK_DAYS: "7"
+  ARXIV_MAX_RESULTS: "1000"
+  # GitHub ingestion settings
+  GITHUB_LOOKBACK_DAYS: "7"
+  GITHUB_MAX_REPOS: "500"
+  # Scoring settings
+  SCORING_BATCH_SIZE: "100"
+  # Linking settings
+  LINKING_BATCH_SIZE: "50"
+  LINKING_MAX_REPO_AGE_DAYS: "180"
