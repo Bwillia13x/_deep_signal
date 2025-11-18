@@ -12,6 +12,12 @@ from app.db.models.http_cache import HttpCache
 from app.db.models.repository import Repository
 from app.db.session import SessionLocal
 from app.lib.http import HttpClient
+from app.metrics import (
+    GITHUB_ERRORS,
+    GITHUB_RATE_LIMIT_HITS,
+    GITHUB_REPOS_PROCESSED,
+    GITHUB_REQUESTS_TOTAL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,39 +86,57 @@ def _persist_cache(
     session.flush()
 
 
-def _upsert_repository(session: Session, data: dict) -> None:
+def _upsert_repository(session: Session, data: dict, query: str) -> str:
     full_name = data.get("full_name")
     if not full_name:
-        return
-    repo = session.query(Repository).filter_by(full_name=full_name).one_or_none()
-    created_at = _parse_datetime(data.get("created_at"))
-    pushed_at = _parse_datetime(data.get("pushed_at"))
-    stars = data.get("stargazers_count", 0) or 0
-    forks = data.get("forks_count", 0) or 0
-    open_issues = data.get("open_issues_count", 0) or 0
-    velocity, velocity_evidence = _compute_velocity(stars, pushed_at)
-    star_score = min(1.0, math.log1p(stars) / math.log1p(2000))
-    complexity = _compute_complexity(star_score, open_issues)
-    values = {
-        "description": data.get("description"),
-        "language": data.get("language"),
-        "topics": data.get("topics") or [],
-        "stars": stars,
-        "forks": forks,
-        "open_issues": open_issues,
-        "created_at": created_at,
-        "pushed_at": pushed_at,
-        "deeptech_complexity_score": complexity,
-        "velocity_score": velocity,
-        "velocity_evidence": velocity_evidence,
-    }
-    if not repo:
-        repo = Repository(full_name=full_name, **values)
-        session.add(repo)
-        return
-    for field, value in values.items():
-        if getattr(repo, field) != value:
-            setattr(repo, field, value)
+        GITHUB_ERRORS.labels(error_type="missing_full_name").inc()
+        return "skipped"
+    
+    try:
+        repo = session.query(Repository).filter_by(full_name=full_name).one_or_none()
+        created_at = _parse_datetime(data.get("created_at"))
+        pushed_at = _parse_datetime(data.get("pushed_at"))
+        stars = data.get("stargazers_count", 0) or 0
+        forks = data.get("forks_count", 0) or 0
+        open_issues = data.get("open_issues_count", 0) or 0
+        velocity, velocity_evidence = _compute_velocity(stars, pushed_at)
+        star_score = min(1.0, math.log1p(stars) / math.log1p(2000))
+        complexity = _compute_complexity(star_score, open_issues)
+        values = {
+            "description": data.get("description"),
+            "language": data.get("language"),
+            "topics": data.get("topics") or [],
+            "stars": stars,
+            "forks": forks,
+            "open_issues": open_issues,
+            "created_at": created_at,
+            "pushed_at": pushed_at,
+            "deeptech_complexity_score": complexity,
+            "velocity_score": velocity,
+            "velocity_evidence": velocity_evidence,
+        }
+        if not repo:
+            repo = Repository(full_name=full_name, **values)
+            session.add(repo)
+            GITHUB_REPOS_PROCESSED.labels(query=query, status="inserted").inc()
+            return "insert"
+        
+        updated = False
+        for field, value in values.items():
+            if getattr(repo, field) != value:
+                setattr(repo, field, value)
+                updated = True
+        
+        if updated:
+            GITHUB_REPOS_PROCESSED.labels(query=query, status="updated").inc()
+            return "update"
+        else:
+            GITHUB_REPOS_PROCESSED.labels(query=query, status="unchanged").inc()
+            return "unchanged"
+    except Exception as e:
+        logger.error("Error upserting repository %s: %s", full_name, str(e))
+        GITHUB_ERRORS.labels(error_type="upsert_error").inc()
+        raise
 
 
 def main() -> None:
@@ -127,6 +151,9 @@ def main() -> None:
     )
     headers = _github_headers()
     session = SessionLocal()
+    inserted = 0
+    updated = 0
+    
     try:
         for category in settings.arxiv_categories:
             for page in range(1, PAGE_LIMIT + 1):
@@ -139,33 +166,61 @@ def main() -> None:
                 }
                 cache_key = _cache_key(GITHUB_SEARCH_URL, params)
                 cache = session.query(HttpCache).filter_by(url=cache_key).one_or_none()
-                resp = client.get(
-                    GITHUB_SEARCH_URL,
-                    params=params,
-                    etag=cache.etag if cache else None,
-                    last_modified=cache.last_modified if cache else None,
-                    extra_headers=headers,
-                )
-                if resp.status_code == 304:
-                    _persist_cache(session, cache_key, resp, params)
-                    continue
-                if resp.status_code != 200:
-                    logger.warning(
-                        "GitHub search error %d: %s", resp.status_code, resp.text[:200]
+                
+                try:
+                    resp = client.get(
+                        GITHUB_SEARCH_URL,
+                        params=params,
+                        etag=cache.etag if cache else None,
+                        last_modified=cache.last_modified if cache else None,
+                        extra_headers=headers,
                     )
+                    GITHUB_REQUESTS_TOTAL.labels(
+                        endpoint="search/repositories", status=resp.status_code
+                    ).inc()
+                    
+                    if resp.status_code == 304:
+                        _persist_cache(session, cache_key, resp, params)
+                        continue
+                    
+                    if resp.status_code == 403:
+                        # Rate limit hit
+                        GITHUB_RATE_LIMIT_HITS.inc()
+                        logger.warning("GitHub rate limit hit, stopping for this category")
+                        break
+                    
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "GitHub search error %d: %s", resp.status_code, resp.text[:200]
+                        )
+                        GITHUB_ERRORS.labels(error_type="http_error").inc()
+                        break
+                    
+                    payload = resp.json()
+                    items = payload.get("items", [])
+                    if not items:
+                        break
+                    
+                    for item in items:
+                        status = _upsert_repository(session, item, category)
+                        if status == "insert":
+                            inserted += 1
+                        elif status == "update":
+                            updated += 1
+                    
+                    _persist_cache(session, cache_key, resp, params)
+                    session.commit()
+                    time.sleep(RATE_LIMIT_SECONDS + random.random())
+                    
+                except Exception as e:
+                    logger.error("GitHub request exception for category %s: %s", category, str(e))
+                    GITHUB_REQUESTS_TOTAL.labels(endpoint="search/repositories", status="error").inc()
+                    GITHUB_ERRORS.labels(error_type="request_exception").inc()
                     break
-                payload = resp.json()
-                items = payload.get("items", [])
-                if not items:
-                    break
-                for item in items:
-                    _upsert_repository(session, item)
-                _persist_cache(session, cache_key, resp, params)
-                session.commit()
-                time.sleep(RATE_LIMIT_SECONDS + random.random())
+                    
     except Exception:
         session.rollback()
         raise
     finally:
         session.close()
-        logger.info("GitHub ingestion completed")
+        logger.info("GitHub ingestion completed (inserted=%d, updated=%d)", inserted, updated)

@@ -7,7 +7,7 @@ from .repositories import router as repositories_router
 
 __all__ = [
     "health_router",
+    "opportunities_router",
     "papers_router",
     "repositories_router",
-    "opportunities_router",
 ]

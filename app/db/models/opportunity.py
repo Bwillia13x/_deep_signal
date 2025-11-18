@@ -20,6 +20,7 @@ class Opportunity(Base):
     )
     executive_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     investment_thesis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recommendation: Mapped[str | None] = mapped_column(String(20), nullable=True)
     week_of: Mapped[Date] = mapped_column(Date, nullable=False)
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

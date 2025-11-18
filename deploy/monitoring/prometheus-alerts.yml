@@ -1,0 +1,158 @@
+# Prometheus Alert Rules for DeepTech Radar
+# Place this file in your Prometheus alerts directory
+
+groups:
+  - name: deeptech_radar_ingestion
+    interval: 30s
+    rules:
+      - alert: NoPapersIngestedIn24Hours
+        expr: increase(ingest_arxiv_papers_processed_total[24h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+          component: arxiv_worker
+        annotations:
+          summary: "No papers ingested from arXiv in 24 hours"
+          description: "The arXiv ingestion worker has not processed any papers in the last 24 hours. Check worker status and arXiv API connectivity."
+      
+      - alert: GitHubRateLimitExceeded
+        expr: rate(ingest_github_rate_limit_hits_total[1h]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          component: github_worker
+        annotations:
+          summary: "High GitHub rate limit hit rate"
+          description: "GitHub rate limit is being hit at {{ $value | humanizePercentage }} over the last hour. Consider reducing request rate or waiting for reset."
+      
+      - alert: ArXivIngestionErrors
+        expr: rate(ingest_arxiv_errors_total[15m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: arxiv_worker
+        annotations:
+          summary: "High arXiv ingestion error rate"
+          description: "arXiv worker error rate is {{ $value }} errors/sec. Check logs for error details."
+      
+      - alert: GitHubIngestionErrors
+        expr: rate(ingest_github_errors_total[15m]) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: github_worker
+        annotations:
+          summary: "High GitHub ingestion error rate"
+          description: "GitHub worker error rate is {{ $value }} errors/sec. Check logs and API status."
+
+  - name: deeptech_radar_api
+    interval: 15s
+    rules:
+      - alert: HighAPIErrorRate
+        expr: rate(api_requests_total{status=~"5.."}[5m]) / rate(api_requests_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High API 5xx error rate"
+          description: "API error rate is {{ $value | humanizePercentage }} over the last 5 minutes. This exceeds the 1% threshold."
+      
+      - alert: SlowVectorSearch
+        expr: histogram_quantile(0.95, rate(api_request_latency_seconds_bucket{path="/v1/papers/near"}[15m])) > 1.0
+        for: 15m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Vector search p95 latency exceeded 1s"
+          description: "Vector search p95 latency is {{ $value }}s, exceeding the 1s threshold. Check database performance and index health."
+      
+      - alert: SlowAPIResponses
+        expr: histogram_quantile(0.95, rate(api_request_latency_seconds_bucket{path="/v1/papers"}[10m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "API p95 latency exceeded 500ms"
+          description: "API p95 latency is {{ $value }}s for {{ $labels.path }}. Investigate slow queries or resource constraints."
+      
+      - alert: HighAPIRequestRate
+        expr: rate(api_requests_total[1m]) > 100
+        for: 5m
+        labels:
+          severity: info
+          component: api
+        annotations:
+          summary: "High API request rate detected"
+          description: "API receiving {{ $value }} requests/sec. Monitor for potential DDoS or unexpected traffic spike."
+
+  - name: deeptech_radar_database
+    interval: 30s
+    rules:
+      - alert: DatabaseConnectionErrors
+        expr: increase(db_connection_errors_total[10m]) > 5
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection errors detected"
+          description: "{{ $value }} database connection errors in the last 10 minutes. Check database availability and connection pool settings."
+      
+      - alert: HighDatabaseConnections
+        expr: db_connections_active / db_connections_max > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database connection pool utilization"
+          description: "Database connection pool is {{ $value | humanizePercentage }} utilized. Consider increasing pool size or investigating connection leaks."
+
+  - name: deeptech_radar_workers
+    interval: 60s
+    rules:
+      - alert: ScoringJobFailed
+        expr: time() - scoring_job_last_success_timestamp > 86400
+        for: 1h
+        labels:
+          severity: warning
+          component: scoring_worker
+        annotations:
+          summary: "Scoring job has not completed successfully in 24 hours"
+          description: "The daily scoring job has not completed successfully in over 24 hours. Check worker logs and database connectivity."
+      
+      - alert: OpportunitiesJobFailed
+        expr: time() - opportunities_job_last_success_timestamp > 86400
+        for: 1h
+        labels:
+          severity: warning
+          component: opportunities_worker
+        annotations:
+          summary: "Opportunities job has not completed successfully in 24 hours"
+          description: "The daily opportunities job has not completed successfully in over 24 hours. Check worker logs and scoring data availability."
+
+  - name: deeptech_radar_system
+    interval: 30s
+    rules:
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 / 1024 > 4
+        for: 15m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Process memory usage is {{ $value }}GB. Monitor for memory leaks or consider scaling resources."
+      
+      - alert: DiskSpaceLow
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.1
+        for: 10m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Disk space critically low"
+          description: "Available disk space is {{ $value | humanizePercentage }}. Clean up old data or expand storage."

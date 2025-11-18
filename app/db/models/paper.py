@@ -1,6 +1,6 @@
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, DateTime, String, Text, func
-from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR
+from sqlalchemy import BigInteger, DateTime, Float, String, Text, func
+from sqlalchemy.dialects.postgresql import ARRAY, JSON, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -24,3 +24,15 @@ class Paper(Base):
     )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
     tsv: Mapped[str | None] = mapped_column(TSVECTOR, nullable=True)
+    
+    # Scoring fields
+    moat_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    moat_evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    scalability_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    scalability_evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    attention_gap_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    attention_gap_evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    network_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    network_evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    composite_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    scoring_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
