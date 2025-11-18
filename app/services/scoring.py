@@ -1,4 +1,5 @@
 """Scoring functions for moat and scalability analysis."""
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -263,7 +264,6 @@ def calculate_network_score(
         centralities = [coauthor_counts.get(author, 1) for author in authors]
         avg_centrality = sum(centralities) / len(centralities)
         # Normalize: log scale (researchers with 100+ coauthors are very connected)
-        import math
         normalized_centrality = math.log1p(avg_centrality) / math.log1p(100)
     else:
         # Fallback: more authors = more connected (simple proxy)

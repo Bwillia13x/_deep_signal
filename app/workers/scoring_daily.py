@@ -2,8 +2,6 @@ import logging
 from datetime import datetime, timedelta
 from statistics import mean, pstdev
 
-from sqlalchemy import func
-
 from app.db.models import DomainMetric, Paper, PaperRepoLink, Repository
 from app.db.session import SessionLocal
 from app.services.scoring import (
@@ -45,6 +43,28 @@ def main() -> None:
             attention_raw_scores: list[float] = []
             network_scores: list[float] = []
             
+            # Pre-fetch all paper-repo links and repository stars for this domain to avoid N+1 queries
+            paper_ids = [paper.id for paper in group]
+            
+            # Fetch all links for papers in this domain
+            all_links = session.query(PaperRepoLink).filter(
+                PaperRepoLink.paper_id.in_(paper_ids)
+            ).all()
+            
+            # Build a mapping of paper_id -> list of repo_ids
+            paper_to_repos: dict[int, list[int]] = {}
+            for link in all_links:
+                paper_to_repos.setdefault(link.paper_id, []).append(link.repo_id)
+            
+            # Get all unique repo IDs and fetch their stars in one query
+            all_repo_ids = list({link.repo_id for link in all_links})
+            repo_stars_map: dict[int, int] = {}
+            if all_repo_ids:
+                repos = session.query(Repository.id, Repository.stars).filter(
+                    Repository.id.in_(all_repo_ids)
+                ).all()
+                repo_stars_map = {repo_id: stars or 0 for repo_id, stars in repos}
+            
             for paper in group:
                 # Novelty score
                 novelty = 0.0
@@ -77,16 +97,10 @@ def main() -> None:
                 paper.scalability_evidence = scalability_evidence
                 scalability_scores.append(scalability)
                 
-                # Get repo stars for attention calculation
-                repo_links = session.query(PaperRepoLink).filter_by(paper_id=paper.id).all()
-                link_count = len(repo_links)
-                repo_stars = 0
-                if link_count > 0:
-                    repo_ids = [link.repo_id for link in repo_links]
-                    star_sum = session.query(func.sum(Repository.stars)).filter(
-                        Repository.id.in_(repo_ids)
-                    ).scalar()
-                    repo_stars = int(star_sum) if star_sum else 0
+                # Get repo stars for attention calculation using pre-fetched data
+                repo_ids = paper_to_repos.get(paper.id, [])
+                link_count = len(repo_ids)
+                repo_stars = sum(repo_stars_map.get(repo_id, 0) for repo_id in repo_ids)
                 
                 attention_raw_scores.append(repo_stars + link_count * 10)
                 
@@ -104,16 +118,10 @@ def main() -> None:
             
             # Second pass: compute attention gap and composite scores
             for paper in group:
-                # Get paper's attention data
-                repo_links = session.query(PaperRepoLink).filter_by(paper_id=paper.id).all()
-                link_count = len(repo_links)
-                repo_stars = 0
-                if link_count > 0:
-                    repo_ids = [link.repo_id for link in repo_links]
-                    star_sum = session.query(func.sum(Repository.stars)).filter(
-                        Repository.id.in_(repo_ids)
-                    ).scalar()
-                    repo_stars = int(star_sum) if star_sum else 0
+                # Get paper's attention data using pre-fetched data
+                repo_ids = paper_to_repos.get(paper.id, [])
+                link_count = len(repo_ids)
+                repo_stars = sum(repo_stars_map.get(repo_id, 0) for repo_id in repo_ids)
                 
                 # Attention gap score
                 attention_gap, attention_evidence = calculate_attention_gap_score(
