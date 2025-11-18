@@ -49,8 +49,8 @@ def test_vector_search_with_text_query(client):
         mock_service.embed = MagicMock(return_value=[0.1] * 384)
         mock_get_service.return_value = mock_service
         
-        # Make request
-        response = client.get("/papers/near?text_query=quantum computing&k=3")
+        # Make request with /v1 prefix
+        response = client.get("/v1/papers/near?text_query=quantum computing&k=3")
         
         # Clear overrides
         app.dependency_overrides.clear()
@@ -88,7 +88,7 @@ def test_vector_search_with_paper_id(client):
     app.dependency_overrides[get_db] = lambda: mock_db
     
     # Make request
-    response = client.get("/papers/near?paper_id=100&k=2")
+    response = client.get("/v1/papers/near?paper_id=100&k=2")
     
     # Clear overrides
     app.dependency_overrides.clear()
@@ -104,9 +104,11 @@ def test_vector_search_with_paper_id(client):
 def test_vector_search_missing_parameters(client):
     """Test vector search without required parameters."""
     # No mock needed for this test
-    response = client.get("/papers/near")
+    response = client.get("/v1/papers/near")
     assert response.status_code == 400
-    assert "Provide text_query or paper_id" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail["error"] == "missing_parameter"
+    assert "text_query" in detail["message"] or "paper_id" in detail["message"]
 
 
 def test_vector_search_paper_not_found(client):
@@ -120,13 +122,15 @@ def test_vector_search_paper_not_found(client):
     # Override dependencies
     app.dependency_overrides[get_db] = lambda: mock_db
     
-    response = client.get("/papers/near?paper_id=99999")
+    response = client.get("/v1/papers/near?paper_id=99999")
     
     # Clear overrides
     app.dependency_overrides.clear()
     
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail["error"] == "not_found"
+    assert "not found" in detail["message"] or "no embedding" in detail["message"]
 
 
 def test_vector_search_paper_no_embedding(client):
@@ -140,13 +144,15 @@ def test_vector_search_paper_no_embedding(client):
     # Override dependencies
     app.dependency_overrides[get_db] = lambda: mock_db
     
-    response = client.get("/papers/near?paper_id=123")
+    response = client.get("/v1/papers/near?paper_id=123")
     
     # Clear overrides
     app.dependency_overrides.clear()
     
     assert response.status_code == 404
-    assert "no embedding" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail["error"] == "not_found"
+    assert "no embedding" in detail["message"] or "not found" in detail["message"]
 
 
 def test_vector_search_k_parameter_bounds(client):
@@ -166,12 +172,12 @@ def test_vector_search_k_parameter_bounds(client):
         
         # Valid k values
         for k in [1, 10, 50]:
-            response = client.get(f"/papers/near?text_query=test&k={k}")
+            response = client.get(f"/v1/papers/near?text_query=test&k={k}")
             assert response.status_code == 200, f"k={k} should be valid"
         
         # Invalid k values
         for k in [0, -1, 51, 100]:
-            response = client.get(f"/papers/near?text_query=test&k={k}")
+            response = client.get(f"/v1/papers/near?text_query=test&k={k}")
             assert response.status_code == 422, f"k={k} should be invalid"
     
     # Clear overrides

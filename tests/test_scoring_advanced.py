@@ -42,7 +42,7 @@ class TestAttentionGapScore:
     
     def test_high_quality_high_attention(self):
         """Test high quality + high attention = low gap (already recognized)."""
-        score, evidence = calculate_attention_gap_score(
+        score, _evidence = calculate_attention_gap_score(
             moat_score=0.8,
             scalability_score=0.7,
             repo_stars=500,
