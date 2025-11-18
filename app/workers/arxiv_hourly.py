@@ -10,6 +10,7 @@ from app.config import settings
 from app.db.models.paper import Paper
 from app.db.session import SessionLocal
 from app.lib.http import HttpClient
+from app.metrics import ARXIV_ERRORS, ARXIV_PAPERS_PROCESSED, ARXIV_REQUESTS_TOTAL
 from app.services.embeddings import EmbeddingService
 from app.services.keyword_domain import classify_domain
 
@@ -56,58 +57,79 @@ def _fetch_entries(
         "sortBy": "submittedDate",
         "sortOrder": "descending",
     }
-    resp = client.get(
-        ARXIV_API_URL, params=params, extra_headers={"Accept": "application/atom+xml"}
-    )
-    if resp.status_code != 200:
-        logger.warning(
-            "arXiv request failed (%s): %s", resp.status_code, resp.text[:200]
+    try:
+        resp = client.get(
+            ARXIV_API_URL, params=params, extra_headers={"Accept": "application/atom+xml"}
         )
+        ARXIV_REQUESTS_TOTAL.labels(category=category, status=resp.status_code).inc()
+        
+        if resp.status_code != 200:
+            logger.warning(
+                "arXiv request failed (%s): %s", resp.status_code, resp.text[:200]
+            )
+            ARXIV_ERRORS.labels(category=category, error_type="http_error").inc()
+            return []
+        return list(feedparser.parse(resp.text).entries)
+    except Exception as e:
+        logger.error("arXiv request exception for category %s: %s", category, str(e))
+        ARXIV_REQUESTS_TOTAL.labels(category=category, status="error").inc()
+        ARXIV_ERRORS.labels(category=category, error_type="request_exception").inc()
         return []
-    return list(feedparser.parse(resp.text).entries)
 
 
 def _persist_entry(
-    session, embedder: EmbeddingService, entry: dict, published_at: datetime | None
+    session, embedder: EmbeddingService, entry: dict, published_at: datetime | None, category: str
 ):
     external_id = entry.get("id")
     if not external_id:
+        ARXIV_ERRORS.labels(category=category, error_type="missing_id").inc()
         return None
     if "/" in external_id:
         external_id = external_id.rsplit("/", 1)[-1]
-    title = (entry.get("title") or "").strip()
-    summary = (entry.get("summary") or "").strip()
-    keywords = list(_extract_keywords(entry))
-    doi = entry.get("arxiv_doi")
-    domain = _enforce_domain(title, keywords)
-    text_to_embed = _build_embedding_text(entry) or external_id
-    embedding = embedder.embed(text_to_embed)
-    if len(embedding) != settings.embedding_dim:
-        logger.debug(
-            "Embedding dim mismatch (%d expected, %d got)",
-            settings.embedding_dim,
-            len(embedding),
-        )
-    paper = session.query(Paper).filter_by(external_id=external_id).one_or_none()
-    values = {
-        "title": title,
-        "abstract": summary,
-        "domain": domain,
-        "keywords": keywords,
-        "doi": doi,
-        "published_at": published_at,
-        "embedding": embedding,
-    }
-    if not paper:
-        paper = Paper(external_id=external_id, **values)
-        session.add(paper)
-        return "insert"
-    updated = False
-    for field, value in values.items():
-        if getattr(paper, field) != value:
-            setattr(paper, field, value)
-            updated = True
-    return "update" if updated else None
+    
+    try:
+        title = (entry.get("title") or "").strip()
+        summary = (entry.get("summary") or "").strip()
+        keywords = list(_extract_keywords(entry))
+        doi = entry.get("arxiv_doi")
+        domain = _enforce_domain(title, keywords)
+        text_to_embed = _build_embedding_text(entry) or external_id
+        embedding = embedder.embed(text_to_embed)
+        if len(embedding) != settings.embedding_dim:
+            logger.debug(
+                "Embedding dim mismatch (%d expected, %d got)",
+                settings.embedding_dim,
+                len(embedding),
+            )
+        paper = session.query(Paper).filter_by(external_id=external_id).one_or_none()
+        values = {
+            "title": title,
+            "abstract": summary,
+            "domain": domain,
+            "keywords": keywords,
+            "doi": doi,
+            "published_at": published_at,
+            "embedding": embedding,
+        }
+        if not paper:
+            paper = Paper(external_id=external_id, **values)
+            session.add(paper)
+            ARXIV_PAPERS_PROCESSED.labels(category=category, status="inserted").inc()
+            return "insert"
+        updated = False
+        for field, value in values.items():
+            if getattr(paper, field) != value:
+                setattr(paper, field, value)
+                updated = True
+        if updated:
+            ARXIV_PAPERS_PROCESSED.labels(category=category, status="updated").inc()
+        else:
+            ARXIV_PAPERS_PROCESSED.labels(category=category, status="unchanged").inc()
+        return "update" if updated else None
+    except Exception as e:
+        logger.error("Error persisting arXiv entry %s: %s", external_id, str(e))
+        ARXIV_ERRORS.labels(category=category, error_type="persist_error").inc()
+        raise
 
 
 def main() -> None:
@@ -133,7 +155,7 @@ def main() -> None:
                     if published_at and published_at < cutoff:
                         stop = True
                         break
-                    status = _persist_entry(session, embedder, entry, published_at)
+                    status = _persist_entry(session, embedder, entry, published_at, category)
                     if status == "insert":
                         inserted += 1
                     elif status == "update":

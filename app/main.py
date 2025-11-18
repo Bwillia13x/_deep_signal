@@ -8,11 +8,13 @@ from app.api.routes.papers import router as papers_router
 from app.api.routes.repositories import router as repos_router
 from app.config import settings
 from app.logging_config import configure_logging
+from app.middleware.prometheus import PrometheusMiddleware
 from app.middleware.request_id import RequestIdMiddleware
 
 app = FastAPI(title="DeepTech Radar", version="0.1.0")
 
 configure_logging(settings.log_level)
+app.add_middleware(PrometheusMiddleware)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
