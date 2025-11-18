@@ -186,3 +186,160 @@ def normalize_score_zscore(score: float, domain_mean: float, domain_std: float, 
     normalized = (z_score + clip_std) / (2 * clip_std)
     
     return max(0.0, min(1.0, normalized))
+
+
+def calculate_attention_gap_score(
+    moat_score: float,
+    scalability_score: float,
+    repo_stars: int,
+    link_count: int,
+    domain_mean_stars: float,
+    domain_std_stars: float,
+) -> tuple[float, dict]:
+    """
+    Calculate attention gap score (quality vs attention mismatch).
+    
+    Args:
+        moat_score: Moat score of the paper
+        scalability_score: Scalability score of the paper
+        repo_stars: Total stars from linked repositories
+        link_count: Number of paper-repo links
+        domain_mean_stars: Mean stars in domain
+        domain_std_stars: Standard deviation of stars in domain
+    
+    Returns:
+        Tuple of (score, evidence) where score is in [0, 1]
+    """
+    # Technical quality proxy (average of moat and scalability)
+    technical_quality = (moat_score + scalability_score) / 2.0
+    
+    # Attention proxy (normalized repo stars + link count boost)
+    attention_raw = repo_stars + (link_count * 10)  # Each link worth 10 "stars"
+    
+    # Normalize attention using domain statistics
+    if domain_std_stars > 0:
+        attention_normalized = normalize_score_zscore(
+            attention_raw, domain_mean_stars, domain_std_stars, clip_std=3.0
+        )
+    else:
+        attention_normalized = 0.5
+    
+    # Gap score: high quality + low attention = high gap
+    # Weighted by quality (we only care about gap if quality is high)
+    gap = (1.0 - attention_normalized) * technical_quality
+    
+    evidence = {
+        "technical_quality": technical_quality,
+        "repo_stars": repo_stars,
+        "link_count": link_count,
+        "attention_raw": attention_raw,
+        "attention_normalized": attention_normalized,
+        "gap": gap,
+    }
+    
+    return max(0.0, min(1.0, gap)), evidence
+
+
+def calculate_network_score(
+    authors: list[str] | None,
+    coauthor_counts: dict[str, int] | None = None,
+) -> tuple[float, dict]:
+    """
+    Calculate network score based on author collaboration patterns.
+    
+    Args:
+        authors: List of author names for this paper
+        coauthor_counts: Optional dict mapping authors to their total coauthor counts
+    
+    Returns:
+        Tuple of (score, evidence) where score is in [0, 1]
+    """
+    if not authors or len(authors) == 0:
+        return 0.0, {"author_count": 0, "avg_centrality": 0.0}
+    
+    # Simple centrality proxy: number of coauthors per author
+    # If coauthor_counts not provided, use author count as proxy
+    if coauthor_counts:
+        centralities = [coauthor_counts.get(author, 1) for author in authors]
+        avg_centrality = sum(centralities) / len(centralities)
+        # Normalize: log scale (researchers with 100+ coauthors are very connected)
+        import math
+        normalized_centrality = math.log1p(avg_centrality) / math.log1p(100)
+    else:
+        # Fallback: more authors = more connected (simple proxy)
+        author_count = len(authors)
+        normalized_centrality = min(1.0, author_count / 10.0)  # 10+ authors = max
+        avg_centrality = author_count
+    
+    # Cross-domain bonus: if authors > 5, assume cross-domain collaboration
+    cross_domain_bonus = 0.1 if len(authors) > 5 else 0.0
+    
+    score = min(1.0, normalized_centrality + cross_domain_bonus)
+    
+    evidence = {
+        "author_count": len(authors),
+        "avg_centrality": avg_centrality,
+        "cross_domain_bonus": cross_domain_bonus,
+    }
+    
+    return max(0.0, min(1.0, score)), evidence
+
+
+def calculate_composite_score(
+    novelty: float,
+    momentum: float,
+    attention_gap: float,
+    moat: float,
+    scalability: float,
+    network: float,
+) -> tuple[float, dict]:
+    """
+    Calculate composite score from all 6 component scores.
+    
+    Weights:
+        - novelty: 0.25
+        - momentum: 0.15
+        - attention_gap: 0.20
+        - moat: 0.20
+        - scalability: 0.15
+        - network: 0.05
+    
+    Synergy bonus: +0.02 per metric >0.7, capped at +0.08
+    
+    Returns:
+        Tuple of (composite_score, metadata)
+    """
+    # Weighted sum
+    weights = {
+        "novelty": 0.25,
+        "momentum": 0.15,
+        "attention_gap": 0.20,
+        "moat": 0.20,
+        "scalability": 0.15,
+        "network": 0.05,
+    }
+    
+    weighted_sum = (
+        novelty * weights["novelty"] +
+        momentum * weights["momentum"] +
+        attention_gap * weights["attention_gap"] +
+        moat * weights["moat"] +
+        scalability * weights["scalability"] +
+        network * weights["network"]
+    )
+    
+    # Synergy bonus: papers that excel in multiple dimensions get a boost
+    high_scores = sum(1 for score in [novelty, momentum, attention_gap, moat, scalability, network] if score > 0.7)
+    synergy_bonus = min(0.08, high_scores * 0.02)
+    
+    composite = weighted_sum + synergy_bonus
+    composite = max(0.0, min(1.0, composite))  # Clip to [0, 1]
+    
+    metadata = {
+        "weighted_sum": weighted_sum,
+        "synergy_bonus": synergy_bonus,
+        "high_score_count": high_scores,
+        "weights": weights,
+    }
+    
+    return composite, metadata

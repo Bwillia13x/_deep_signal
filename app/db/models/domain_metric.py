@@ -23,3 +23,7 @@ class DomainMetric(Base):
     moat_sigma: Mapped[float | None] = mapped_column(Float, nullable=True)
     scalability_mu: Mapped[float | None] = mapped_column(Float, nullable=True)
     scalability_sigma: Mapped[float | None] = mapped_column(Float, nullable=True)
+    attention_mu: Mapped[float | None] = mapped_column(Float, nullable=True)
+    attention_sigma: Mapped[float | None] = mapped_column(Float, nullable=True)
+    network_mu: Mapped[float | None] = mapped_column(Float, nullable=True)
+    network_sigma: Mapped[float | None] = mapped_column(Float, nullable=True)

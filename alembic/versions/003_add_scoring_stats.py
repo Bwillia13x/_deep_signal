@@ -22,9 +22,17 @@ def upgrade() -> None:
     op.add_column("domain_metrics", sa.Column("moat_sigma", sa.Float, nullable=True))
     op.add_column("domain_metrics", sa.Column("scalability_mu", sa.Float, nullable=True))
     op.add_column("domain_metrics", sa.Column("scalability_sigma", sa.Float, nullable=True))
+    op.add_column("domain_metrics", sa.Column("attention_mu", sa.Float, nullable=True))
+    op.add_column("domain_metrics", sa.Column("attention_sigma", sa.Float, nullable=True))
+    op.add_column("domain_metrics", sa.Column("network_mu", sa.Float, nullable=True))
+    op.add_column("domain_metrics", sa.Column("network_sigma", sa.Float, nullable=True))
 
 
 def downgrade() -> None:
+    op.drop_column("domain_metrics", "network_sigma")
+    op.drop_column("domain_metrics", "network_mu")
+    op.drop_column("domain_metrics", "attention_sigma")
+    op.drop_column("domain_metrics", "attention_mu")
     op.drop_column("domain_metrics", "scalability_sigma")
     op.drop_column("domain_metrics", "scalability_mu")
     op.drop_column("domain_metrics", "moat_sigma")

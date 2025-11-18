@@ -6,10 +6,10 @@ from .paper_repo_link import PaperRepoLink
 from .repository import Repository
 
 __all__ = [
-    "Paper",
-    "Repository",
-    "PaperRepoLink",
     "DomainMetric",
-    "Opportunity",
     "HttpCache",
+    "Opportunity",
+    "Paper",
+    "PaperRepoLink",
+    "Repository",
 ]
