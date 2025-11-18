@@ -1,0 +1,135 @@
+# Scoring Lexicons for Moat and Scalability Scores
+# These keywords and phrases are used to detect barriers and manufacturing signals
+
+moat_barriers:
+  # Equipment barriers - specialized equipment requirements
+  equipment:
+    - cleanroom
+    - cryogenic
+    - cryostat
+    - vacuum chamber
+    - ultra-high vacuum
+    - electron microscope
+    - scanning tunneling microscope
+    - atomic force microscope
+    - synchrotron
+    - particle accelerator
+    - mass spectrometer
+    - dilution refrigerator
+    - maser
+    - laser cooling
+    
+  # Process barriers - complex/manual processes
+  process:
+    - manual assembly
+    - hand-fabricated
+    - custom fabrication
+    - bespoke manufacturing
+    - artisanal
+    - specialized equipment
+    - expert operator
+    - requires training
+    - clean room protocol
+    
+  # Material barriers - rare/controlled materials
+  materials:
+    - rare earth
+    - exotic materials
+    - radioactive
+    - controlled substance
+    - hazardous material
+    - toxic
+    - explosive
+    - carcinogenic
+    - isotope
+    - heavy water
+    - enriched uranium
+    - plutonium
+    
+  # Compute barriers - massive compute requirements  
+  compute:
+    - supercomputer
+    - gpu cluster
+    - tpu
+    - quantum computer
+    - exascale
+    - petaflop
+    - distributed computing
+    - high-performance computing
+    - hpc cluster
+    - computational expensive
+    
+  # Code/data availability (negative moat)
+  openness:
+    - open source
+    - github
+    - code available
+    - data available
+    - reproducible
+    - replication package
+    - supplementary code
+    - public repository
+
+scalability_signals:
+  # Manufacturing-friendly signals
+  manufacturing:
+    - cmos compatible
+    - cmos
+    - wafer scale
+    - room temperature
+    - ambient conditions
+    - standard fabrication
+    - commercial foundry
+    - scalable manufacturing
+    - mass production
+    - automated assembly
+    - high throughput
+    - batch processing
+    - lithography
+    - silicon
+    
+  # Economic signals
+  economic:
+    - low cost
+    - cost effective
+    - economical
+    - inexpensive
+    - affordable
+    - yield
+    - high yield
+    - production yield
+    - pilot line
+    - pilot plant
+    - demonstration plant
+    - commercial scale
+    
+  # Maturity signals
+  maturity:
+    - trl 6
+    - trl 7
+    - trl 8
+    - trl 9
+    - technology readiness level
+    - pilot
+    - demonstration
+    - field test
+    - licensing
+    - licensed
+    - patent granted
+    - commercialization
+    - market ready
+    - production ready
+    
+  # Scalability blockers (negative signals)
+  blockers:
+    - cleanroom only
+    - cryogenic required
+    - vacuum required
+    - manual operation
+    - manual calibration
+    - regulatory hurdle
+    - regulatory approval required
+    - fda approval
+    - clinical trial
+    - safety concerns
+    - environmental concerns

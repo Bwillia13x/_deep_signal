@@ -19,3 +19,7 @@ class DomainMetric(Base):
     novelty_sigma: Mapped[float | None] = mapped_column(Float, nullable=True)
     momentum_mu: Mapped[float | None] = mapped_column(Float, nullable=True)
     momentum_sigma: Mapped[float | None] = mapped_column(Float, nullable=True)
+    moat_mu: Mapped[float | None] = mapped_column(Float, nullable=True)
+    moat_sigma: Mapped[float | None] = mapped_column(Float, nullable=True)
+    scalability_mu: Mapped[float | None] = mapped_column(Float, nullable=True)
+    scalability_sigma: Mapped[float | None] = mapped_column(Float, nullable=True)
