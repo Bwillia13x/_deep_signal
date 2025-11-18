@@ -6,7 +6,7 @@ Runs automated checks against staging deployment to validate functionality.
 import argparse
 import sys
 import time
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import requests
 

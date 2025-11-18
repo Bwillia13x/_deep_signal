@@ -9,10 +9,10 @@ metadata:
   annotations:
     # Adjust these annotations based on your ingress controller
     # Example for nginx-ingress:
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    nginx.ingress.kubernetes.io/rate-limit: "100"
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # nginx.ingress.kubernetes.io/rate-limit: "100"
     # Example for cert-manager (if using Let's Encrypt):
     # cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
